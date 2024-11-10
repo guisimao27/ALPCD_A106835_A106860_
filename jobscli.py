@@ -1,3 +1,5 @@
+
+
 import requests
 import json
 import sys
@@ -8,7 +10,7 @@ API_KEY = "bb25acebcb908a8d2c53a67fb4d1c3d2"  # Chave da API fornecida
 
 def top(n: int):
     """
-    Lista os N trabalhos mais recentes.
+    Lista os N trabalhos mais recentes em formato JSON.
     """
     headers = {
         "User-Agent": "Mozilla/5.0",
@@ -23,14 +25,20 @@ def top(n: int):
         response.raise_for_status()  # Levanta uma exceção se o status não for 200
         data = response.json()  # Tenta decodificar o JSON da resposta
         
-        # Exibe cada trabalho formatado
+        # Formata os trabalhos em JSON
         if "results" in data:
+            jobs = []
             for job in data["results"]:
-                print(f"Título: {job['title']}")
-                print(f"Empresa: {job['company']['name']}")
-                print(f"Localização: {', '.join([location['name'] for location in job['locations']])}")
-                print(f"Publicado em: {job['publishedAt']}")
-                print("-" * 40)
+                job_info = {
+                    "Título": job['title'],
+                    "Empresa": job['company']['name'],
+                    "Localização": [location['name'] for location in job['locations']],
+                    "Publicado em": job['publishedAt']
+                }
+                jobs.append(job_info)
+            
+            # Exibe o JSON formatado
+            print(json.dumps(jobs, indent=4, ensure_ascii=False))
         else:
             print("Nenhum trabalho encontrado.")
         
@@ -91,17 +99,17 @@ def search_jobs(localidade: str, empresa: str, numero_de_trabalhos: int):
         trabalhos_filtrados = []
         for trabalho in data.get("results", []):
             if any(loc["name"] == localidade for loc in trabalho["locations"]) and trabalho["company"]["name"].lower() == empresa.lower():
-                trabalhos_filtrados.append(trabalho)
+                trabalhos_filtrados.append({
+                    "Título": trabalho['title'],
+                    "Empresa": trabalho['company']['name'],
+                    "Localidade": [loc['name'] for loc in trabalho['locations']],
+                    "Publicado em": trabalho['publishedAt'],
+                    "Link": f"https://www.itjobs.pt/oferta/{trabalho['slug']}"
+                })
         
-        # Verifica se há resultados
+        # Exibe os resultados em formato JSON
         if trabalhos_filtrados:
-            for i, trabalho in enumerate(trabalhos_filtrados, start=1):
-                print(f"Trabalho {i}:")
-                print(f"  Título: {trabalho['title']}")
-                print(f"  Empresa: {trabalho['company']['name']}")
-                print(f"  Localidade: {', '.join([loc['name'] for loc in trabalho['locations']])}")
-                print(f"  Publicado em: {trabalho['publishedAt']}")
-                print(f"  Link: https://www.itjobs.pt/oferta/{trabalho['slug']}\n")
+            print(json.dumps(trabalhos_filtrados, indent=4, ensure_ascii=False))
         else:
             print("Nenhum trabalho encontrado para os critérios especificados.")
     
@@ -123,6 +131,7 @@ if __name__ == "__main__":
     else:
         print("Uso: python jobscli.py <localidade> <empresa> <numero_de_trabalhos>")
 
+
 #USAR NO TERMINAL ( python jobscli.py "Lisboa" "Integer Consulting" 3)
 
 
@@ -142,7 +151,7 @@ API_KEY = "bb25acebcb908a8d2c53a67fb4d1c3d2"
 
 def extract_salary(job_id: int):
     """
-    Extrai a informação de salário para um determinado job ID.
+    Extrai a informação de salário para um determinado job ID em formato JSON.
     Se o campo 'wage' for nulo, procura no campo 'body' com expressões regulares.
     """
     headers = {
@@ -162,7 +171,8 @@ def extract_salary(job_id: int):
         # Verificar o campo wage diretamente
         wage = job_data.get("wage")
         if wage:
-            print(f"Salário: {wage}")
+            salary_info = {"Salário": wage}
+            print(json.dumps(salary_info, ensure_ascii=False, indent=4))
             return
 
         # Se o campo wage for nulo, buscar no campo 'body'
@@ -179,13 +189,14 @@ def extract_salary(job_id: int):
             match = re.search(pattern, body_text, re.IGNORECASE)
             if match:
                 salary = match.group(1).replace('.', '').replace(',', '.')
-                print(f"Salário (extraído do corpo da descrição): {salary}")
+                salary_info = {"Salário (extraído do corpo da descrição)": salary}
+                print(json.dumps(salary_info, ensure_ascii=False, indent=4))
                 return
 
-        print("Salário: Informação não encontrada")
+        print(json.dumps({"Salário": "Informação não encontrada"}, ensure_ascii=False, indent=4))
 
     except requests.exceptions.RequestException as e:
-        print(f"Erro ao acessar a API: {e}")
+        print(json.dumps({"Erro": f"Erro ao acessar a API: {e}"}, ensure_ascii=False, indent=4))
 
 if __name__ == "__main__":
     if len(sys.argv) > 2 and sys.argv[1] == "salary":
@@ -193,16 +204,12 @@ if __name__ == "__main__":
             job_id = int(sys.argv[2])
             extract_salary(job_id)
         except ValueError:
-            print("Por favor, insira um job id válido.")
+            print(json.dumps({"Erro": "Por favor, insira um job id válido."}, ensure_ascii=False, indent=4))
     else:
         print("Uso: python jobscli.py salary <JOBID>")
 
-#python jobscli.py salary 492169
 
+#usar no terminal python jobscli.py salary 492169
 
-#se tiver o salario nulo 
-
-
-#parte das expresso~es regualres  penizao faz ! 
 
 
