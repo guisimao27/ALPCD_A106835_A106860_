@@ -135,10 +135,7 @@ if __name__ == "__main__":
 #USAR NO TERMINAL ( python jobscli.py "Lisboa" "Integer Consulting" 3)
 
 
-
-#C)
-
-
+#c)
 
 import requests
 import json
@@ -147,7 +144,7 @@ import sys
 
 # Configurações da API
 API_URL = "https://api.itjobs.pt/job/get.json"
-API_KEY = "bb25acebcb908a8d2c53a67fb4d1c3d2"
+API_KEY = "bb25acebcb908a8d2c53a67fb4d1c3d2"  # Substitua pela sua chave da API
 
 def extract_salary(job_id: int):
     """
@@ -162,13 +159,14 @@ def extract_salary(job_id: int):
         "api_key": API_KEY,
         "id": job_id
     }
-    
+
     try:
+        # Fazendo a requisição à API
         response = requests.get(API_URL, headers=headers, params=params)
         response.raise_for_status()  # Levanta exceção se o status não for 200
         job_data = response.json()
-        
-        # Verificar o campo wage diretamente
+
+        # Verificar o campo 'wage' diretamente
         wage = job_data.get("wage")
         if wage:
             salary_info = {"Salário": wage}
@@ -208,8 +206,4 @@ if __name__ == "__main__":
     else:
         print("Uso: python jobscli.py salary <JOBID>")
 
-
-#usar no terminal python jobscli.py salary 492169
-
-
-
+#por no terminal python jobscli.py salary 491881
