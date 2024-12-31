@@ -1,0 +1,366 @@
+import requests
+from bs4 import BeautifulSoup
+import typer
+import csv
+from collections import Counter
+import re
+
+
+app = typer.Typer()
+
+# Define sua chave API aqui
+API_KEY = 'bb25acebcb908a8d2c53a67fb4d1c3d2'
+
+#alinea a 
+
+
+def get_job_details_a(job_id: str):
+    """Obtém detalhes do trabalho usando a API ITJobs com headers apropriados."""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:98.0) Gecko/20100101 Firefox/98.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Encoding": "gzip, deflate",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Cache-Control": "max-age=0"
+    }
+    url = f"https://api.itjobs.pt/job/get.json?api_key={API_KEY}&id={job_id}"
+    response = requests.get(url, headers=headers)
+    if response.ok:
+        return response.json()
+    else:
+        print(f"Erro ao acessar a API: {response.status_code}")
+        return None
+    
+def get_company_info(company_name: str):
+    """Realiza o scraping das informações da empresa no AmbitionBox."""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:98.0) Gecko/20100101 Firefox/98.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Encoding": "gzip, deflate",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Cache-Control": "max-age=0"
+    }
+    url = f"https://www.ambitionbox.com/overview/{company_name}-overview"
+    response = requests.get(url, headers=headers)
+    if response.ok:
+        soup = BeautifulSoup(response.content, 'html.parser')
+        rating = soup.find("span", class_="css-1jxf684 text-primary-text font-pn-700 text-xl !text-base").text.strip()
+        description = soup.find("div", class_="text-sm font-pn-400 [&_ul]:list-disc [&_ol]:list-[auto] [&_ul]:ml-5 [&_ol]:ml-5").find("p").text.strip()
+        benefits_soup = soup.find_all("div", class_="css-146c3p1 font-pn-600 text-sm text-primary-text")
+        benefits = [benefit.text.strip() for benefit in benefits_soup]
+
+        return {
+            "rating": rating,
+            "description": description,
+            "benefits": benefits
+        }
+    else:
+        print(f"Erro ao acessar AmbitionBox: {response.status_code}")
+        return None
+
+import csv
+
+@app.command()
+def get_job(job_id: str, export_csv: bool = False):
+    """Obtém e exibe informações do trabalho e da empresa, opcionalmente exporta para CSV."""
+    job_details = get_job_details_a(job_id)
+    if job_details and 'error' not in job_details:
+        company_name = job_details['company']['name'].replace(' ', '-').lower()
+        company_info = get_company_info(company_name)
+        if company_info:
+            result = {
+                "job_id": job_id,
+                **company_info
+            }
+            print(result)
+            if export_csv:
+                with open(f"{job_id}_company_info.csv", 'w', newline='') as file:
+                    writer = csv.DictWriter(file, fieldnames=result.keys())
+                    writer.writeheader()
+                    writer.writerow(result)
+                print("Detalhes exportados para CSV.")
+        else:
+            print("Informações da empresa não puderam ser obtidas.")
+    else:
+        print("Detalhes do trabalho não encontrados ou erro na API.")
+
+
+#usar no terminal python jobscli.py get-job 494278
+
+#) alinea b
+
+
+def get_jobs_urls(page):
+    url = f"https://www.ambitionbox.com/jobs/search?page={page}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:98.0) Gecko/20100101 Firefox/98.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Encoding": "gzip, deflate",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Cache-Control": "max-age=0"
+    }
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        soup = BeautifulSoup(response.content, 'html.parser')
+        meta_tags = soup.find_all('meta', {'itemprop': 'url'})
+        job_urls = [meta_tag['content'] for meta_tag in meta_tags if 'content' in meta_tag.attrs]
+        return job_urls
+    else:
+        return None
+
+def get_job_details_b(job_url):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:98.0) Gecko/20100101 Firefox/98.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Encoding": "gzip, deflate",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Cache-Control": "max-age=0"
+    }
+    response = requests.get(job_url, headers=headers)
+    if response.status_code == 200:
+        soup = BeautifulSoup(response.content, 'html.parser')
+        try:
+            title = soup.find('h1', class_="desig bold-title").text.strip()
+            location = soup.find('div', class_="entity loc").find('p', class_="body-small-l").text.strip()
+            vacancies = soup.find('div', class_="entity vacancy").find('p', class_="body-small-l").text.strip()
+            vacancies = int(vacancies.split()[0])  # Extrair o número de vagas do texto
+            return title, location, vacancies
+        except AttributeError:
+            print(f"Falha ao extrair detalhes do trabalho em {job_url}")
+            return None
+    else:
+        print(f"Falha ao acessar a página do trabalho. Status code: {response.status_code}")
+        return None
+    
+@app.command()
+def statistics():
+    jobs = []
+    page = 1
+    while page < 3:
+        print(f"Processando a página {page}...")  # Indica a página atual sendo processada
+        job_urls = get_jobs_urls(page)
+        if job_urls is None or len(job_urls) == 0:
+            break  # Parar quando não houver mais páginas ou URLs
+        for job_url in job_urls[1:]:
+            job_details = get_job_details_b(job_url)
+            if job_details:
+                title, location, vacancies = job_details
+                locations = [loc.strip() for loc in location.split(",")]
+                for loc in locations:
+                    jobs.append((loc, title, vacancies))
+        page += 1
+
+    job_counts = {}
+    for location, title, vacancies in jobs:
+        key = (location, title)
+        if key in job_counts:
+            job_counts[key] += vacancies
+        else:
+            job_counts[key] = vacancies
+
+    with open('job_statistics.csv', mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['Zona', 'Tipo de Trabalho', 'Nº de vagas'])
+        for (location, title), vacancies in job_counts.items():
+            writer.writerow([location, title, vacancies])
+
+    print("Ficheiro de exportação criado com sucesso.")
+
+#if __name__ == "__main__":
+    app()  
+
+
+#usar no terminal python jobscli.py statistics 
+
+
+#alinea c 
+
+
+
+def fetch_job_urls(job_title: str):
+    """ Busca URLs de trabalhos nas páginas de resultados de pesquisa do AmbitionBox. """
+    page = 1
+    job_urls = []
+    while page < 4:
+        url = f"https://www.ambitionbox.com/jobs/search?page={page}&tag={job_title.replace(' ', '%20')}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:98.0) Gecko/20100101 Firefox/98.0",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Cache-Control": "max-age=0"
+        }
+        response = requests.get(url, headers=headers)
+        if response.status_code != 200:
+            break  # Interrompe o loop se a página não for carregada corretamente
+        soup = BeautifulSoup(response.content, 'html.parser')
+        meta_tags = soup.find_all('meta', {'itemprop': 'url'})
+        new_urls = [meta_tag['content'] for meta_tag in meta_tags if 'content' in meta_tag.attrs]
+        if not new_urls:
+            break  # Se não encontrar mais URLs, termina o loop
+        job_urls.extend(new_urls)
+        page += 1
+    return job_urls
+
+def extract_skills_from_job_page(job_url: str):
+    """ Extrai habilidades de cada página individual de descrição de trabalho. """
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:98.0) Gecko/20100101 Firefox/98.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Encoding": "gzip, deflate",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Cache-Control": "max-age=0"
+    }
+    response = requests.get(job_url, headers=headers)
+    soup = BeautifulSoup(response.content, 'html.parser')
+    skills_div = soup.find_all('div', class_="show-flex chips-cont")
+    found_skills = [skill.get_text().strip().lower() for div in skills_div for skill in div.find_all('a')]
+    return Counter(found_skills)
+
+@app.command()
+def list_skills(job_title: str, export_csv: bool = False):
+    """ Lista as 10 principais habilidades para um título de trabalho específico e opcionalmente exporta para CSV. """
+    job_urls = fetch_job_urls(job_title)
+    all_skills = Counter()
+    for url in job_urls:
+        job_skills = extract_skills_from_job_page(url)
+        all_skills.update(job_skills)
+    
+    top_skills = [{"skill": skill, "count": count} for skill, count in all_skills.most_common(10)]
+    print(top_skills)
+    if export_csv:
+        with open(f"{job_title.replace(' ', '_')}_skills.csv", 'w', newline='') as file:
+            writer = csv.DictWriter(file, fieldnames=['skill', 'count'])
+            writer.writeheader()
+            writer.writerows(top_skills)
+        print("Habilidades exportadas para CSV.")
+
+#if __name__ == "__main__":
+   # app()
+
+#usar no terminal python jobscli.py list-skills "data scientist"
+
+# para a e) 
+# python jobscli.py get-job 494278 --export-csv   aaaaaaa
+# python jobscli.py list-skills "data scientist" --export-csv ccccccc
+#https://api.itjobs.pt/job/get.json?api_key=bb25acebcb908a8d2c53a67fb4d1c3d2&id=494398   postman 
+
+
+
+
+#alinea d 
+
+
+
+
+API_KEY_ITJOBS = 'bb25acebcb908a8d2c53a67fb4d1c3d2'
+
+def fetch_company_name_from_itjobs(job_id: str):
+    """Fetch company name using ITJobs API with the given job ID."""
+    url = f"https://api.itjobs.pt/job/get.json?api_key={API_KEY_ITJOBS}&id={job_id}"
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:98.0) Gecko/20100101 Firefox/98.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Encoding": "gzip, deflate",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Cache-Control": "max-age=0"
+    }
+
+    response = requests.get(url,headers=headers)
+    if response.ok:
+        data = response.json()
+        return data.get('company', {}).get('name', 'Unknown company')
+    return "Unknown company"
+
+def fetch_job_details_from_simplyhired(company_name: str):
+    """Fetch job details from Simply Hired's JSON data using company name as query."""
+    url = f"https://www.simplyhired.pt/_next/data/XJuAWs-VlRLF8qpN2iQ1H/pt-PT/search.json?q={company_name.replace(' ', '+')}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
+    }
+    response = requests.get(url, headers=headers)
+    data = response.json()
+    
+    job_data = data['pageProps']['viewJobData']
+    
+    if job_data:
+        title = job_data.get("jobTitle", 'No title')
+        description = job_data.get("jobDescriptionHtml", 'No description')
+        rating = job_data.get("employerOverallRating", 'No rating')
+        benefits = job_data.get("benefits", 'No benefits listed')
+
+        job_details = {
+            "title": title,
+            "company": company_name,
+            "rating": rating,
+            "benefits": benefits,
+            "description": description
+        }
+        return job_details
+    return {}
+
+@app.command()
+def show_job(job_id: str):
+    """Show job details from Simply Hired for a specific job ID from ITJobs."""
+    company_name = fetch_company_name_from_itjobs(job_id)
+    job_details = fetch_job_details_from_simplyhired(company_name)
+    if job_details:
+            result = {
+                "job_id": job_id,
+                **job_details
+            }
+            print(result)
+   
+if __name__ == "__main__":
+    app()
+
+
+
+#usar no terminal python jobscli,py show-job 494299
+
+
+
+
